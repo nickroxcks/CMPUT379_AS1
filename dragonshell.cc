@@ -116,23 +116,22 @@ void find_executable(vector<string> command_vector,string path){
   string current_file_path = getcwd(wdir,1000);
   
   //First check if the command is in local directory
-  //cout<<"checking for command in local directory"<<endl;
   run_executable(command_vector,current_file_path);
   
-  
   //Next check $PATH
-  
   for(int i =0;i<path_vec.size();i++){
-    //cout<<"checking in path: " << path_vec.at(i);
     run_executable(command_vector,path_vec.at(i));
   }
 
   //see if command is in ths form:  $DIR file_or_command
-  if(command_vector.size() ==1){
-  vector<string> dir_vec;
-  dir_vec.assign(0,command_vector.at(1));
-  run_executable(dir_vec,command_vector.at(0));
+  if((command_vector.at(0)).at(0) == '/'){
+  string temp_path = command_vector.at(0);
+  vector<string> formatted_vector; //reformat to remove first element and pass to run_executable
+  for(int i=1;i<command_vector.size();i++){
+    formatted_vector.push_back(command_vector.at(i));  
   }
+  run_executable(formatted_vector,temp_path);
+  } 
 }
 
 //TODO: make a cute welcome logo
@@ -142,16 +141,22 @@ void boot_sequence(){
 
 }
 
-string get_command(){
+string get_command(string path){
 
   string command;
 
   printf("dragonshell > ");
   getline(cin,command);
   
+  //this would occur if ctrl d was pressed or other related stdin keystrokes
   if (cin.fail() || cin.eof()) {
     cin.clear(); // reset cin state
-    cout<<"we are resetting cin"<<endl;
+    for(int i=0;i<process_list.size();i++){
+        //cout<<"killing the pid: " << process_list.at(i)<< "kill returns: "<<kill(process_list.at(i),SIGSTOP)<<endl;
+        kill(process_list.at(i),SIGSTOP);
+      }
+    cout<<"Exiting"<<endl;
+    exit(1);  //ends the program
     return "";
   }
   return command;
@@ -301,7 +306,7 @@ void process_pipe(vector<string> pipe_vector,string path){
     if (rc2 < 0) {
       // fork failed; exit
       fprintf(stderr, "fork failed\n");
-      exit(1);
+      _exit(1);
     } 
     else if (rc2 == 0) {
       
@@ -362,7 +367,7 @@ string query_handling(string command,string path){
       if (rc < 0) {
           // fork failed; exit
           fprintf(stderr, "fork failed\n");
-          exit(1);
+          _exit(1);
       } 
       else if (rc == 0) {
           // child (new process)
@@ -378,23 +383,13 @@ string query_handling(string command,string path){
             close(fd);
             find_executable(vec_sendout,path);
           }
-          //if the user entered the command with a directory as the first command parameter
-          else if((command_vector.at(0)).at(0) == '/'){
-            cout<<"checking directory given by user for command"<<endl;
-            string temp_path = command_vector.at(0);
-            vector<string> formatted_vector; //reformat to remove first element and pass to find_executable
-            for(int i=1;i<command_vector.size();i++){
-              formatted_vector.push_back(command_vector.at(i));  
-            }
-            find_executable(formatted_vector,temp_path);
-          }
+
           //otherwise, search for the command
          else{ 
             find_executable(command_vector,path);
-         }
+          }
           cout<<"dragonshell: Command not found"<<endl;
-          exit(1);
-     
+          _exit(1);     
         }
       else {
         // parent goes down this path (original process)
@@ -423,8 +418,8 @@ int main(int argc, char **argv) {
   
   while(true){
     
-    cout<<"hello, this should be the master. my pid is: "<< (int) getpid()<<endl;
-    command = get_command();
+    //cout<<"hello, this should be the master. my pid is: "<< (int) getpid()<<endl;
+    command = get_command(path);
     
     if(command.compare("") == 0){
       continue;
@@ -448,14 +443,14 @@ int main(int argc, char **argv) {
         kill(getppid(),SIGCONT);  //tell parent to resume operation
         freopen("/dev/null", "w", stdout);  //prevents process from printing to terminal
         path = query_handling(new_command,path);  //continue running in backround
-        _exit(2);  //this will send SIGCHLD to parent, in which parent will wait to kill zombie
-        cout<<"Fatal Error"<<endl;
+        _exit(2);  //this will send SIGCHLD to parent, in which signal handler will  make 
+        cout<<"Fatal Error"<<endl; //the parent call wait() to kill the zombie
       }
       else{
         //parent is here
         waitpid(newrc,NULL,NULL);  //this just wait for the child to print the run in backround message. 
-        process_list.push_back(newrc);
-        cout<<"parent still going"<<endl;
+        process_list.push_back(newrc);  //it is NOT waiting for the child to finish its process.
+        //cout<<"parent still going"<<endl;
         continue;
       }
       continue;
