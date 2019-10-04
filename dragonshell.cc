@@ -17,17 +17,10 @@ using namespace std;
 #include <sys/types.h>
 #include <fcntl.h>
 #include <signal.h>
-/**
- * @brief Tokenize a string 
- * 
- * @param str - The string to tokenize
- * @param delim - The string containing delimiter character(s)
- * @return std::vector<std::string> - The list of tokenized strings. Can be empty
- */
 
-int masterpid=1;
+int masterpid=1;  //temporarily initialized to 1
 bool command_complete = 0;
-vector<int> process_list;
+vector<int> process_list;  //vector of all the child processes that have been created
 
 void handle_keystrokes(int signum) 
 {
@@ -53,6 +46,13 @@ void handler_test(int signum){
 }
 */
 
+/**
+ * @brief Tokenize a string 
+ * 
+ * @param str - The string to tokenize
+ * @param delim - The string containing delimiter character(s)
+ * @return std::vector<std::string> - The list of tokenized strings. Can be empty
+ */
 std::vector<std::string> tokenize(const std::string &str, const char *delim) {
   char* cstr = new char[str.size() + 1];
   std::strcpy(cstr, str.c_str());
@@ -69,22 +69,6 @@ std::vector<std::string> tokenize(const std::string &str, const char *delim) {
 
   return tokens;
 }
-
-class command_obj 
-{ 
-    public: 
-    string command_path;
-    int id; 
-      
-    // printname is not defined inside class defination 
-    void printname(); 
-      
-    // printid is defined inside class defination 
-    void printid() 
-    { 
-        cout << "Geek id is: " << id; 
-    } 
-};
 
 void run_executable(vector<string> command_vector,string search_path){
   int command_size = command_vector.size();
@@ -258,19 +242,21 @@ string built_commands(vector<string> command_vector,string path){
     }
     //exit command
     else if(command_vector.at(0).compare("exit") == 0){
+      //in the event a process still somehow manages to remain a zombie(shouldnt happen), kill it.
       for(int i=0;i<process_list.size();i++){
-       cout<<"killing the pid: " << process_list.at(i)<< "kill returns: "<<kill(process_list.at(i),SIGSTOP)<<endl;
+        //cout<<"killing the pid: " << process_list.at(i)<< "kill returns: "<<kill(process_list.at(i),SIGSTOP)<<endl;
+        kill(process_list.at(i),SIGSTOP);
       }
-      _exit(1);
+      cout<<"Exiting"<<endl;
+      _exit(1);  //ends the program
     }
   return path;
 }
 
 void process_pipe(vector<string> pipe_vector,string path){
-  int old_stdout;
-  old_stdout = dup(1);
+
   int pipefd[2];
-  pipe(pipefd);
+  pipe(pipefd);  //a shared memory between proccesses
   int rc = fork();
   vector<string> first_command_vector = tokenize(pipe_vector.at(0)," ");
   vector<string> second_command_vector = tokenize(pipe_vector.at(1)," ");
@@ -278,7 +264,7 @@ void process_pipe(vector<string> pipe_vector,string path){
   if (rc < 0) {
     // fork failed; exit
     fprintf(stderr, "fork failed\n");
-    exit(1);
+    _exit(1);
   } 
   else if (rc == 0) {
     // child (new process)
@@ -286,14 +272,14 @@ void process_pipe(vector<string> pipe_vector,string path){
     close(pipefd[0]);    // close reading end in the child
 
     dup2(pipefd[1], 1);  // send stdout to the pipe
-    dup2(pipefd[1], 2);  // send stderr to the pipe
+    dup2(pipefd[1], 2);  // send stderr to the pipe(just in case)
 
-    close(pipefd[1]);    // this descriptor is no longer needed
+    close(pipefd[1]);
 
-    find_executable(first_command_vector,path);
+    find_executable(first_command_vector,path);  //output goes to pipe
       
     printf("child haasn't found any commands");
-    exit(1);
+    _exit(1);
   }
   else {
     // parent goes down this path (original process)
@@ -301,7 +287,7 @@ void process_pipe(vector<string> pipe_vector,string path){
 
     close(pipefd[1]);  // close the write end of the pipe(parent)
     
-    //note: for latee, this loop will read from pipe that the child has filled up and put it in a buffer(char array)
+    //note to self: This loop will read from pipe that the child has filled up and put it in a buffer(char array)
     //while (read(pipefd[0], buffer, sizeof(buffer)) != 0) //continue to read from the pipe until child finishes
     //{}  
     process_list.push_back(rc);
@@ -319,38 +305,42 @@ void process_pipe(vector<string> pipe_vector,string path){
     } 
     else if (rc2 == 0) {
       
-      //might not be neccesary to do this
+      //read from the pipe it's STDIN for the next command
+      //Standard STDOUT inherited from the parent
       dup2(pipefd[0], 0);
-      //dup2(old_stdout,1);
 
-      cout<<"is stdout working?"<<endl;
-      //close(pipefd[0]);
       find_executable(second_command_vector,path);
       cout<<"dragonshell: Second command failed"<<endl;
-      exit(1);
+      _exit(1);
     }
     else {
       // parent goes down this path (original process)
       process_list.push_back(rc);
       int wc = wait(NULL);
-      printf("hello, I am parent of %d (wc:%d) (pid:%d)\n",
-      rc2, wc, (int) getpid());
+      //printf("hello, I am parent of %d (wc:%d) (pid:%d)\n",
+      //rc2, wc, (int) getpid());
     }
   }
 }
-string query_handling(string command,string path){
-  //int qhpid = (int) getpid();
-  //sighandler_t signal(int signal,sighandler_t SIG_IGN);
-  vector<string> semicolon_vector = tokenize(command,";");
-  command_obj test;
-  for(int i = 0; i<semicolon_vector.size(); i++){
-    vector<string> pipe_vector = tokenize(semicolon_vector.at(i),"|");
-    vector<string> command_vector = tokenize(semicolon_vector.at(i)," ");
-    string command_str = semicolon_vector.at(i);
-    //out_str.erase(remove(out_str.begin(),out_str.end(),' '),out_str.end());
-    vector<string> out_vec = tokenize(command_str,">");
 
-   // cout<< "Running the command " << semicolon_vector.at(i) << endl;  //for debugging
+/**
+ * @brief Query through a command
+ * 
+ * @param command - String command passed by user
+ * @param path - The current $PATH varaible to check for executables
+ * @return string - return the new $PATH which may have changed
+ */
+string query_handling(string command,string path){
+
+  vector<string> semicolon_vector = tokenize(command,";");  //this vector breaks the command by its ";"
+
+  //loop through all the commands that are seperated by ";"
+  for(int i = 0; i<semicolon_vector.size(); i++){
+    vector<string> pipe_vector = tokenize(semicolon_vector.at(i),"|"); //vector that splits the current command by its pipes
+    vector<string> command_vector = tokenize(semicolon_vector.at(i)," ");//vector that splits the current command by spaces
+    string command_str = semicolon_vector.at(i);
+    vector<string> out_vec = tokenize(command_str,">"); //vector that splits current command by ">" for output redirect
+
     if(pipe_vector.size() == 2){
       process_pipe(pipe_vector,path);  //if the command has a piping structure, proceed to pipe processing 
       continue;
@@ -361,7 +351,7 @@ string query_handling(string command,string path){
     }
     path = built_commands(command_vector,path);  //check if its a built in command. If it is, run it
    
-    if(command_complete){  //if a command was executed, move on to next command
+    if(command_complete){  //if basic command was executed, move on to next command in semicolon_vector
       command_complete=0;
       continue;
     } 
@@ -376,21 +366,28 @@ string query_handling(string command,string path){
       } 
       else if (rc == 0) {
           // child (new process)
-          printf("hello, I am child (pid:%d)\n", (int) getpid());
-          
+          //printf("hello, I am child (pid:%d)\n", (int) getpid());
+
           //If we need to rederict output to a file, we will go through this if block
           if(out_vec.size() == 2){
             vector<string> vec_sendout = tokenize(out_vec.at(0)," ");
                 
             int fd = open((out_vec.at(1)).c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
                 
-            dup2(fd, 1);   // make stdout go to file
-            //dup2(fd, 2);   // make stderr go to file - you may choose to not do this
-            close(fd);     // fd no longer needed - the dup'ed handles are sufficient
-
+            dup2(fd, 1);   // send stdout to file
+            close(fd);
             find_executable(vec_sendout,path);
           }
-
+          //if the user entered the command with a directory as the first command parameter
+          else if((command_vector.at(0)).at(0) == '/'){
+            cout<<"checking directory given by user for command"<<endl;
+            string temp_path = command_vector.at(0);
+            vector<string> formatted_vector; //reformat to remove first element and pass to find_executable
+            for(int i=1;i<command_vector.size();i++){
+              formatted_vector.push_back(command_vector.at(i));  
+            }
+            find_executable(formatted_vector,temp_path);
+          }
           //otherwise, search for the command
          else{ 
             find_executable(command_vector,path);
@@ -398,81 +395,65 @@ string query_handling(string command,string path){
           cout<<"dragonshell: Command not found"<<endl;
           exit(1);
      
-         }
+        }
       else {
         // parent goes down this path (original process)
         process_list.push_back(rc);
         int wc = waitpid(rc,NULL,NULL);
-        printf("hello, I am parent of %d (wc:%d) (pid:%d)\n",
-        rc, wc, (int) getpid());
+        //printf("hello, I am parent of %d (wc:%d) (pid:%d)\n",
+        //rc, wc, (int) getpid());
       }
     }
-}
+  }
   return path;
 }
 
 int main(int argc, char **argv) {
   boot_sequence();
-  masterpid = (int) getpid();
+  masterpid = (int) getpid();  //the high level parent
 
-/*
- while(true){
-  int master = fork();
-  if(master>0){
-  struct sigaction new_action;
-  struct sigaction *pointing = &new_action;
-  new_action.sa_handler = handler_test;
-  new_action.sa_flags = 0;
-  sigemptyset(&new_action.sa_mask);
-  sigaction(SIGINT,pointing,NULL);
-  cout<<"hello im the parent"<<(int)getpid()<<endl;
-  int wc7 = wait(NULL);
-  cout<<"parent going again"<<endl;
-  }
-  else{
-  
-*/
   void (*signal_ctrlc)(int);
   void (*signal_ctrlz)(int);
   void (*signal_child)(int);
   signal_ctrlc = signal(SIGINT, handle_keystrokes);
   signal_ctrlz = signal(SIGTSTP, handle_keystrokes);
   signal_child = signal(SIGCHLD,handle_keystrokes);
-
   string command;
   string path = "/bin/:/usr/bin/";
+  
   while(true){
+    
     cout<<"hello, this should be the master. my pid is: "<< (int) getpid()<<endl;
     command = get_command();
-    cout<<"nani?"<<endl;
+    
     if(command.compare("") == 0){
       continue;
     }
-    //change
     
     int strsize = command.size();
     char lastchar = command.at(strsize-1);
+    
+    //Check if the command need to be put in the backround
     if(lastchar == '&'){
-      cout<<"we detected backround process"<<endl;
       vector<string> new_command_vector = tokenize(command,"&");
       string new_command = new_command_vector.at(0);
       int newrc = fork();
       if(newrc<0){
         fprintf(stderr, "fork failed\n");
-        exit(1);
+        _exit(1);
       }
       else if(newrc == 0){
         //child is here
         cout<<"PID "<< (int) getpid()<<" is running in the background"<<endl;
-       freopen("/dev/null", "w", stdout);
-        path = query_handling(new_command,path);
-        cout<<(int) getpid()<< " is done"<<endl;
-        _exit(2);
+        kill(getppid(),SIGCONT);  //tell parent to resume operation
+        freopen("/dev/null", "w", stdout);  //prevents process from printing to terminal
+        path = query_handling(new_command,path);  //continue running in backround
+        _exit(2);  //this will send SIGCHLD to parent, in which parent will wait to kill zombie
         cout<<"Fatal Error"<<endl;
       }
       else{
         //parent is here
-        sleep(1);
+        waitpid(newrc,NULL,NULL);  //this just wait for the child to print the run in backround message. 
         process_list.push_back(newrc);
         cout<<"parent still going"<<endl;
         continue;
@@ -480,14 +461,7 @@ int main(int argc, char **argv) {
       continue;
     }
     
-    path = query_handling(command,path);
+    path = query_handling(command,path);  //if no command needs to run in backround, we will run command
   }
-  
-  //}
-  //}
-  // print the string prompt without a newline, before beginning to read
-  // tokenize the input, run the command(s), and print the result
-  // do this in a loop
-
   return 0;
 }
