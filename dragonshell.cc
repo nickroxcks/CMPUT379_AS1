@@ -72,7 +72,6 @@ std::vector<std::string> tokenize(const std::string &str, const char *delim) {
 
 void run_executable(vector<string> command_vector,string search_path){
   int command_size = command_vector.size();
-  char wdir[1000];
   //cout << getcwd(wdir,1000) << endl;
  // char *argv7[]={"ls", "-al", NULL};
   char *argv1[command_size+1];
@@ -119,7 +118,7 @@ void find_executable(vector<string> command_vector,string path){
   run_executable(command_vector,current_file_path);
   
   //Next check $PATH
-  for(int i =0;i<path_vec.size();i++){
+  for(int i =0;i< (int)path_vec.size();i++){
     run_executable(command_vector,path_vec.at(i));
   }
 
@@ -127,7 +126,7 @@ void find_executable(vector<string> command_vector,string path){
   if((command_vector.at(0)).at(0) == '/'){
   string temp_path = command_vector.at(0);
   vector<string> formatted_vector; //reformat to remove first element and pass to run_executable
-  for(int i=1;i<command_vector.size();i++){
+  for(int i=1;i< (int)command_vector.size();i++){
     formatted_vector.push_back(command_vector.at(i));  
   }
   run_executable(formatted_vector,temp_path);
@@ -136,9 +135,19 @@ void find_executable(vector<string> command_vector,string path){
 
 //TODO: make a cute welcome logo
 void boot_sequence(){
+  string line;
+  ifstream logofile("dragonshell_prompt.txt");
 
-  printf("Welcome to dragonshell!!!\n");
-
+  if (logofile.is_open())
+    {
+      while (getline(logofile,line)){
+        cout << line <<endl;
+        }
+      logofile.close();
+    }
+  else {
+      cout << "Unable to open file";
+    }
 }
 
 string get_command(string path){
@@ -151,7 +160,7 @@ string get_command(string path){
   //this would occur if ctrl d was pressed or other related stdin keystrokes
   if (cin.fail() || cin.eof()) {
     cin.clear(); // reset cin state
-    for(int i=0;i<process_list.size();i++){
+    for(int i=0;i<(int)process_list.size();i++){
         //cout<<"killing the pid: " << process_list.at(i)<< "kill returns: "<<kill(process_list.at(i),SIGSTOP)<<endl;
         kill(process_list.at(i),SIGSTOP);
       }
@@ -248,7 +257,7 @@ string built_commands(vector<string> command_vector,string path){
     //exit command
     else if(command_vector.at(0).compare("exit") == 0){
       //in the event a process still somehow manages to remain a zombie(shouldnt happen), kill it.
-      for(int i=0;i<process_list.size();i++){
+      for(int i=0;i<(int)process_list.size();i++){
         //cout<<"killing the pid: " << process_list.at(i)<< "kill returns: "<<kill(process_list.at(i),SIGSTOP)<<endl;
         kill(process_list.at(i),SIGSTOP);
       }
@@ -296,7 +305,7 @@ void process_pipe(vector<string> pipe_vector,string path){
     //while (read(pipefd[0], buffer, sizeof(buffer)) != 0) //continue to read from the pipe until child finishes
     //{}  
     process_list.push_back(rc);
-    int wc3 = wait(NULL);
+    wait(NULL);
     /*
     for(int i=0;i<=100;i++){
       cout<<buffer[i]<<endl;
@@ -321,7 +330,7 @@ void process_pipe(vector<string> pipe_vector,string path){
     else {
       // parent goes down this path (original process)
       process_list.push_back(rc);
-      int wc = wait(NULL);
+      wait(NULL);
       //printf("hello, I am parent of %d (wc:%d) (pid:%d)\n",
       //rc2, wc, (int) getpid());
     }
@@ -340,7 +349,7 @@ string query_handling(string command,string path){
   vector<string> semicolon_vector = tokenize(command,";");  //this vector breaks the command by its ";"
 
   //loop through all the commands that are seperated by ";"
-  for(int i = 0; i<semicolon_vector.size(); i++){
+  for(int i = 0; i<(int)semicolon_vector.size(); i++){
     vector<string> pipe_vector = tokenize(semicolon_vector.at(i),"|"); //vector that splits the current command by its pipes
     vector<string> command_vector = tokenize(semicolon_vector.at(i)," ");//vector that splits the current command by spaces
     string command_str = semicolon_vector.at(i);
@@ -394,7 +403,7 @@ string query_handling(string command,string path){
       else {
         // parent goes down this path (original process)
         process_list.push_back(rc);
-        int wc = waitpid(rc,NULL,NULL);
+        waitpid(rc,NULL,0);
         //printf("hello, I am parent of %d (wc:%d) (pid:%d)\n",
         //rc, wc, (int) getpid());
       }
@@ -407,12 +416,10 @@ int main(int argc, char **argv) {
   boot_sequence();
   masterpid = (int) getpid();  //the high level parent
 
-  void (*signal_ctrlc)(int);
-  void (*signal_ctrlz)(int);
-  void (*signal_child)(int);
-  signal_ctrlc = signal(SIGINT, handle_keystrokes);
-  signal_ctrlz = signal(SIGTSTP, handle_keystrokes);
-  signal_child = signal(SIGCHLD,handle_keystrokes);
+
+  signal(SIGINT, handle_keystrokes);
+  signal(SIGTSTP, handle_keystrokes);
+  signal(SIGCHLD,handle_keystrokes);
   string command;
   string path = "/bin/:/usr/bin/";
   
@@ -447,8 +454,8 @@ int main(int argc, char **argv) {
         cout<<"Fatal Error"<<endl; //the parent call wait() to kill the zombie
       }
       else{
-        //parent is here
-        waitpid(newrc,NULL,NULL);  //this just wait for the child to print the run in backround message. 
+        //parent is here 
+        waitpid(newrc,NULL,0);  //this just wait for the child to print the run in backround message. 
         process_list.push_back(newrc);  //it is NOT waiting for the child to finish its process.
         //cout<<"parent still going"<<endl;
         continue;
