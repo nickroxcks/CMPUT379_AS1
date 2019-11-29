@@ -1,5 +1,5 @@
 # DRAGON SHELL
-Nicholas Serrano(1508361) - dragonshell interactive shell
+Dragonshell interactive shell
 
 System Calls Used:
 -chdir()
@@ -26,7 +26,7 @@ Program Architecture:
 
 As mentioned previously, the program first checks if the command is a backround command. 
 If the command is a backround command (command has '&' as the last entered character),
-the program proceeds to the running the command in the backround. All commands that
+the program proceeds to running the command in the backround. All commands that
 need to be executed first go through a query_handling() function. This functions purpose
 is to break up the user entered command into individual commands (those that are seperated by ';')
 and run each of them sequentially. A loop will go through each of these individual commands and decides
@@ -94,15 +94,6 @@ child then sends a signal to the parent to continue running, and the child proce
 child are running at the same time). After the child finished its command, the child sends a signal to its parent denoting it is finished. At
 this point, the child is a zombie proccess as it needs its parent to call wait(). As a solution to this problem, the parent has a handler installed
 that will react to a SIGCHLD signal, and interupt the parent to then call the wait() function to allow the child to gracefully terminate.
-
-Miscellaneous:
-
-I noticed a bug sometimes with white spaces in commands. It happens in certain edge cases, but as long as commands are entered similarily to 
-how they appear in th assignment description, it shouldn't hopefully be a problem. Ussually happens when piping is involved.
-
-I've tried various tests with other commands(python3, and other shell programs) to verify my program works in most cases.
-
-Special thanks to the Cmput 379 team for the nice dragonshell logo.
 
 
 
