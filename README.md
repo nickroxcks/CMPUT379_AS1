@@ -1,4 +1,4 @@
-# CMPUT379_AS1
+# DRAGON SHELL
 Nicholas Serrano(1508361) - dragonshell interactive shell
 
 System Calls Used:
